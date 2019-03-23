@@ -1,5 +1,6 @@
 % DD2424 Deep Learning in Data Science from Prof. Josephine Sullivan
-% Assignment 01 dated March 19 2019 Author: Harsha HN harshahn@kth.se
+% Assignment 01 dated March 19 2019 
+% Author: Harsha HN harshahn@kth.se
 
 %% Exercise 1
 close all; clear all; clc;
@@ -44,9 +45,11 @@ tic
 TimeGrad_AS = toc
 
 %Correctness check
-% tic [ngrad_b, ngrad_W] = ComputeGradsNum(trainX, trainY, W, b, lambda,
-% 1e-6); %[nsgrad_b, nsgrad_W] = ComputeGradsNumSlow(trainX, trainY, W, b,
-% lambda, 1e-6); TimeGrad_NS = toc;
+
+% [ngrad_b, ngrad_W] = ComputeGradsNum(trainX, trainY, W, b, lambda, 1e-6); 
+% [nsgrad_b, nsgrad_W] = ComputeGradsNumSlow(trainX, trainY, W, b,
+% lambda, 1e-6);
+
 %rerrW = rerr(grad_W, ngrad_W); rerrb = rerr(grad_b, ngrad_b);
 
 %% 7. Mini-batch gradient descent algorithm
@@ -63,25 +66,43 @@ N = 10000; %Num of image
 GDparams.n_batch = 100; GDparams.eta = 0.01; GDparams.n_epochs = 40;
 
 for e = 1: GDparams.n_epochs
-    ord = randperm(N/GDparams.n_batch);
-    for j=1:max(ord) %50 batches
+    %Random shuffle
+    rng(400); shuffle = randperm(N);
+    trainX = X(:, shuffle); trainY = Y(:, shuffle);
+    %Batches
+    ord = 1:N/GDparams.n_batch; %ord = randperm(N/GDparams.n_batch);
+    %For each batch
+    for j=1:max(ord) 
         j_start = (ord(j)-1)*GDparams.n_batch + 1;
         j_end = ord(j)*GDparams.n_batch;
         inds = j_start:j_end;
-        Xbatch = X(:, j_start:j_end);
-        Ybatch = Y(:, j_start:j_end);
-        [W, b, J(e+j-1)] = MiniBatchGD(Xbatch, Ybatch, GDparams, W, b, lambda);
+        Xbatch = trainX(:, j_start:j_end);
+        Ybatch = trainY(:, j_start:j_end);
+        [W, b] = MiniBatchGD(Xbatch, Ybatch, GDparams, W, b, lambda);
     end
-    A(e) = ComputeAccuracy(X, y, W, b)*100;
+    J = ComputeCost(X, Y, W, b, lambda);
+    % A(e) = ComputeAccuracy(X, y, W, b)*100;
 end
 figure(2); plot(J); xlim([0 e]);  ylim([min(J) max(J)]); title('Cost');
-figure(3); plot(A); xlim([0 e]);  ylim([min(A) max(A)]); title('Accuracy');
+%figure(3); plot(A); xlim([0 e]);  ylim([min(A) max(A)]); title('Accuracy');
+A_train = ComputeAccuracy(X, y, W, b)*100;
 
-%randperm
-%rng(400)
+%Validation set
+[X, Y, y] = LoadBatch('./Datasets/cifar-10-batches-mat/data_batch_2.mat');
+A_valset = ComputeAccuracy(X, y, W, b)*100;
+
+%Test set
+[X, Y, y] = LoadBatch('./Datasets/cifar-10-batches-mat/test_batch.mat');
+A_testset = ComputeAccuracy(X, y, W, b)*100;
+
+%Class templates
+s_im{10} = zeros(32,32,3);
+
+for i=1:10
+    im = reshape(W(i, :), 32, 32, 3);
+    s_im{i}= (im - min(im(:))) / (max(im(:)) - min(im(:)));
+    s_im{i} = permute(s_im{i}, [2, 1, 3]);
+end
+
+montage(s_im, 'Size', [1,10]);
 %% 8 
-
-
-
-
-

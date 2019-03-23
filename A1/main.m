@@ -1,5 +1,6 @@
 % DD2424 Deep Learning in Data Science from Prof. Josephine Sullivan
-% Assignment 01 dated March 19 2019 Author: Harsha HN harshahn@kth.se
+% Assignment 01 dated March 19 2019 
+% Author: Harsha HN harshahn@kth.se
 
 %% Exercise 1
 close all; clear all; clc;
@@ -39,52 +40,64 @@ J = ComputeCost(trainX, trainY, W, b, lambda);
 A = ComputeAccuracy(trainX, trainy, W, b);
 
 %% 6. Compute the gradient
-tic
+%Analytical method
 [grad_W, grad_b] = ComputeGradients(trainX, trainY, P, W, lambda);
-TimeGrad_AS = toc
 
-%Correctness check
-% tic [ngrad_b, ngrad_W] = ComputeGradsNum(trainX, trainY, W, b, lambda,
-% 1e-6); %[nsgrad_b, nsgrad_W] = ComputeGradsNumSlow(trainX, trainY, W, b,
-% lambda, 1e-6); TimeGrad_NS = toc;
+%Numerical method
+%tic % [ngrad_b, ngrad_W] = ComputeGradsNum(trainX, trainY, W, b, lambda, 1e-6); 
+% [nsgrad_b, nsgrad_W] = ComputeGradsNumSlow(trainX, trainY, W, b, lambda, 1e-6); %toc
+
+%Relative error
 %rerrW = rerr(grad_W, ngrad_W); rerrb = rerr(grad_b, ngrad_b);
 
 %% 7. Mini-batch gradient descent algorithm
 close all; clear all; clc;
 
-k = 10;%class 
+k = 10; %class 
 d = 32*32*3; %image size
 N = 10000; %Num of image
 
+%Load the datasets
 [X, Y, y] = LoadBatch('./Datasets/cifar-10-batches-mat/data_batch_1.mat');
+[Xv, Yv, yv] = LoadBatch('./Datasets/cifar-10-batches-mat/data_batch_2.mat');
+[Xt, Yt, yt] = LoadBatch('./Datasets/cifar-10-batches-mat/test_batch.mat');
 % X: 3072x10,000, Y: 10x10,000, y: 1x10,000
 
+% Initialization of parameters & hyperparameters
 [W, b] = InitParam(k, d); lambda = 0.0; %0.01; % W: 10x3072, b: 10x1
 GDparams.n_batch = 100; GDparams.eta = 0.01; GDparams.n_epochs = 40;
+J_train = zeros(1, GDparams.n_epochs); J_val = zeros(1, GDparams.n_epochs);
 
-for e = 1: GDparams.n_epochs
-    %ord = randperm(N/GDparams.n_batch); %
-    ord = 1:N/GDparams.n_batch;
-    for j=1:max(ord) %50 batches
+for e = 1:GDparams.n_epochs
+    
+    %Random shuffle
+    rng(400); shuffle = randperm(N);
+    trainX = X(:, shuffle); trainY = Y(:, shuffle);
+
+    %Batches
+    ord = 1:N/GDparams.n_batch; %ord = randperm(N/GDparams.n_batch);
+    for j=1:max(ord) 
         j_start = (ord(j)-1)*GDparams.n_batch + 1;
         j_end = ord(j)*GDparams.n_batch;
         inds = j_start:j_end;
-        Xbatch = X(:, j_start:j_end);
-        Ybatch = Y(:, j_start:j_end);
-        [W, b, J(e+j-1)] = MiniBatchGD(Xbatch, Ybatch, GDparams, W, b, lambda);
+        Xbatch = trainX(:, j_start:j_end);
+        Ybatch = trainY(:, j_start:j_end);
+        [W, b] = MiniBatchGD(Xbatch, Ybatch, GDparams, W, b, lambda);
     end
-   % A(e) = ComputeAccuracy(X, y, W, b)*100;
+    
+    %Evaluate
+    J_train(e) = ComputeCost(X, Y, W, b, lambda);
+    J_val(e) = ComputeCost(Xv, Yv, W, b, lambda);
 end
-figure(2); plot(J); xlim([0 e]);  ylim([min(J) max(J)]); title('Cost');
-%figure(3); plot(A); xlim([0 e]);  ylim([min(A) max(A)]); title('Accuracy');
 
-%Validation set
-[X, Y, y] = LoadBatch('./Datasets/cifar-10-batches-mat/data_batch_2.mat');
-A_vs = ComputeAccuracy(X, y, W, b)*100
+%Plot of cost on training & validation set
+figure(1); xlim([0 e]);  ylim([min(min(J_train), min(J_val)) max(max(J_train), max(max(J_val)))]);
+title('Loss'); xlabel('Epoch'); ylabel('Loss')
+plot(J_train); hold on; plot(J_val); hold off; 
+legend({'Training loss','Validation loss'},'Location','northeast');
 
-%Test set
-[X, Y, y] = LoadBatch('./Datasets/cifar-10-batches-mat/test_batch.mat');
-A_ts = ComputeAccuracy(X, y, W, b)*100
+%Accuracy on test set
+A = ComputeAccuracy(Xt, yt, W, b)*100;
 
 %Class templates
 s_im{10} = zeros(32,32,3);
@@ -93,7 +106,7 @@ for i=1:10
     s_im{i}= (im - min(im(:))) / (max(im(:)) - min(im(:)));
     s_im{i} = permute(s_im{i}, [2, 1, 3]);
 end
+montage(s_im, 'Size', [1,10]);
 
-montage(sim)
-%% 8 
-imshow, imagesc or montage s_im
+%% Exercise 02
+
