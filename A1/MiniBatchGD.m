@@ -1,8 +1,6 @@
 function [Wstar, bstar] = MiniBatchGD(X, Y, GDparams, W, b, lambda)
-    %MINIBATCHGD Summary of this function goes here
-    %   Detailed explanation goes here
     
-    %Compute cost
+    %Predict
     P = EvaluateClassifier(X, W, b);
  
     %Compute gradient

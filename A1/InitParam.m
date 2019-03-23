@@ -1,6 +1,5 @@
 function [W, b] = InitParam(k, d)
-%INITPARAM Summary of this function goes here
-    % Initialize the parameters of the model W and b
+
     W = zeros(k,d); b = zeros(k,1);
     rng(400);
     for i=1:10

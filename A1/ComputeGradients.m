@@ -1,6 +1,4 @@
 function [grad_W, grad_b] = ComputeGradients(X, Y, P, W, lambda)
-    %COMPUTEGRADIENTS Summary of this function goes here
-    %   Detailed explanation goes here
     % Y or P: KxN, X: dxN, W: Kxd, b: Kx1
     
     %Initialize
