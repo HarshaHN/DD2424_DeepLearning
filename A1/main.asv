@@ -1,6 +1,5 @@
 % DD2424 Deep Learning in Data Science from Prof. Josephine Sullivan
-% Assignment 01 dated March 19 2019
-% Author: Harsha HN harshahn@kth.se
+% Assignment 01 dated March 19 2019 Author: Harsha HN harshahn@kth.se
 
 %% Exercise 1
 close all; clear all; clc;
@@ -21,7 +20,7 @@ montage(I(:, :, :, 1:500), 'Size', [5,5]);
 
 %% 2. Initialize the parameters of the model W and b
 W = zeros(k,d); b = zeros(k,1);
-
+lambda = 0.0;%0.01;
 for i=1:10
     W(i,:) = 0.01.*randn(1,3072);
 end
@@ -34,20 +33,55 @@ trainX = X(:, 1:n); trainY = Y(:, 1:n); trainy = y(1:n);
 P = EvaluateClassifier(trainX, W, b); %KxN
 
 %% 4. Compute the cost
-lambda = 0;%0.01;
 J = ComputeCost(trainX, trainY, W, b, lambda);
 
 %% 5 Compute the accuracy
 A = ComputeAccuracy(trainX, trainy, W, b);
 
 %% 6. Compute the gradient
+tic
 [grad_W, grad_b] = ComputeGradients(trainX, trainY, P, W, lambda);
+TimeGrad_AS = toc
 
 %Correctness check
-[ngrad_b, ngrad_W] = ComputeGradsNum(trainX, trainY, W, b, lambda, 1e-6);
-c = sum((grad_W == ngrad_W))];
-%[ngrad b, ngrad W] = ComputeGradsNumSlow(trainX(1:20, 1), trainY(:, 1), W(:, 1:20), b, lambda, 1e-6);
+% tic [ngrad_b, ngrad_W] = ComputeGradsNum(trainX, trainY, W, b, lambda,
+% 1e-6); %[nsgrad_b, nsgrad_W] = ComputeGradsNumSlow(trainX, trainY, W, b,
+% lambda, 1e-6); TimeGrad_NS = toc;
+%rerrW = rerr(grad_W, ngrad_W); rerrb = rerr(grad_b, ngrad_b);
 
-%% 7. 
+%% 7. Mini-batch gradient descent algorithm
+close all; clear all; clc;
 
+k = 10;%class 
+d = 32*32*3; %image size
+N = 10000; %Num of image
+
+[X, Y, y] = LoadBatch('./Datasets/cifar-10-batches-mat/data_batch_1.mat');
+% X: 3072x10,000, Y: 10x10,000, y: 1x10,000
+
+[W, b] = InitParam(k, d); lambda = 0.0; %0.01; % W: 10x3072, b: 10x1
+GDparams.n_batch = 100; GDparams.eta = 0.01; GDparams.n_epochs = 40;
+
+for e = 1: GDparams.n_epochs
+    ord = randperm(N/GDparams.n_batch);
+    for j=1:max(ord) %50 batches
+        j_start = (ord(j)-1)*GDparams.n_batch + 1;
+        j_end = ord(j)*GDparams.n_batch;
+        inds = j_start:j_end;
+        Xbatch = X(:, j_start:j_end);
+        Ybatch = Y(:, j_start:j_end);
+        [W, b, J(e+j-1)] = MiniBatchGD(Xbatch, Ybatch, GDparams, W, b, lambda);
+    end
+    A(e) = ComputeAccuracy(X, y, W, b)*100;
+end
+figure(2); plot(J); xlim([0 e]);  ylim([min(J) max(J)]); title('Cost');
+figure(3); plot(A); xlim([0 e]);  ylim([min(A) max(A)]); title('Accuracy');
+
+%randperm
+%rng(400)
 %% 8 
+
+
+
+
+
