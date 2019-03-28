@@ -1,7 +1,7 @@
 % DD2424 Deep Learning in Data Science from Prof. Josephine Sullivan
 % 01 Assignment dated March 19 2019 
 % Author: Harsha HN harshahn@kth.se
-% Mini-batch gradient descent algorithm
+% Mini-batch Gradient Descent Algorithm
 % Exercise 1
 
 function one
@@ -21,14 +21,15 @@ function one
     [W, b] = InitParam(k, d); lambda = 0; % W: 10x3072, b: 10x1
     GDparams.n_batch = 100; GDparams.eta = 1; GDparams.n_epochs = 40;
     J_train = zeros(1, GDparams.n_epochs); J_val = zeros(1, GDparams.n_epochs);
-
-    for e = 1:GDparams.n_epochs
+    
+    %Training
+    for e = 1:GDparams.n_epochs %Epochs
 
         %Random shuffle
         rng(400); shuffle = randperm(N);
         trainX = X(:, shuffle); trainY = Y(:, shuffle);
 
-        %Batches
+        %Batchwise parameter updation
         ord = 1:N/GDparams.n_batch; %ord = randperm(N/GDparams.n_batch);
         for j=1:max(ord) 
             j_start = (ord(j)-1)*GDparams.n_batch + 1;
@@ -39,7 +40,7 @@ function one
             [W, b] = MiniBatchGD(Xbatch, Ybatch, GDparams, W, b, lambda);
         end
 
-        %Evaluate
+        %Evaluate losses
         J_train(e) = ComputeCost(X, Y, W, b, lambda);
         J_val(e) = ComputeCost(Xv, Yv, W, b, lambda);
     end
@@ -65,7 +66,7 @@ function one
 end
 
 function [X, Y, y] = LoadBatch(filename)
-
+    %Load .mat files into workspace
     A = load(filename); 
     X = double(A.data')./255;% dxN 3072x10,000
     Y = bsxfun(@eq, 1:10, A.labels+1)';% KxN 10x10,000
@@ -74,7 +75,8 @@ function [X, Y, y] = LoadBatch(filename)
 end
 
 function [W, b] = InitParam(k, d)
-
+    %Initialisation of model parameters
+    % W: Kxd, b: Kx1
     W = zeros(k,d);
     rng(400);
     for i=1:k
@@ -86,14 +88,14 @@ function [W, b] = InitParam(k, d)
 end
 
 function P = EvaluateClassifier(X, W, b)
-
-    %SOFTMAX(s) = exp(s)/1T exp(s);
+    %Linear equation and softmax func
     s = W*X + b; % Kxd*dxN + Kx1 = KxN
     P = softmax(s); % KxN
 
 end
 
 function [grad_W, grad_b] = ComputeGradients(X, Y, P, W, lambda)
+    %Compute the gradients through back propagation
     % Y or P: KxN, X: dxN, W: Kxd, b: Kx1
     
     %Initialize
@@ -131,8 +133,9 @@ function [Wstar, bstar] = MiniBatchGD(X, Y, GDparams, W, b, lambda)
 end
 
 function J = ComputeCost(X, Y, W, b, lambda)
+    % Compute cost
     % Y: KxN, X: dxN, W: W: Kxd, b: Kx1, lambda
-    
+
     P = EvaluateClassifier(X, W, b); %KxN
     L = -log(Y' * P); %NxN
     totalLoss = trace(L); %sum(diag(L))
