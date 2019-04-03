@@ -28,14 +28,14 @@ function two
     N = size(X, 2); %Num of training samples %X: 3072x10,000, Y: 10x10,000, y: 1x10,000
 
     %Init of hyperparameters
-    etaMin = 1e-5; etaMax = 1e-1; t = 0; cycle = 2; %Cyclic learning rate
+    etaMin = 1e-5; etaMax = 1e-1; t = 0; cycle = 3; %Cyclic learning rate
     v = 2; GDparams.n_batch = 100; batches = N/GDparams.n_batch;
     ns = v*floor(N/GDparams.n_batch); updates = cycle*2*ns; 
     GDparams.n_epochs = updates/batches; % lMin=-5; lMax=-1;
-    GDparams.eta = 0.01; 
+    GDparams.eta = 0.01; count = 1; lambda = zeros(1,count);
     
     %Check the gradients Ex2
-    %{
+%{
     f = 100; n = 5; h = 1e-5; lambda = 0;
     [theta{1,1}, theta{2,1}] = InitParam(m, f);
     [theta{1,2}, theta{2,2}] = InitParam(k, m);
@@ -47,19 +47,19 @@ function two
     [gn] = ComputeGradsNum( checkX, checkY, nW, nb, lambda, h);
     relerr.w1 = rerr(ga{1,1}, gn{1,1}); relerr.w2 = rerr(ga{1,2}, gn{1,2});
     relerr.b1 = rerr(ga{2,1}, gn{2,1}); relerr.b2 = rerr(ga{2,2}, gn{2,2});
-    %}
+%}
 
     %Sanity check Ex2 
-    %{
+%{
     s = 100; N = s; itr =1;
     X = X(:, 1:s); Y = Y(:, 1:s); y = y(:, 1:s);  
     Xv = Xv(:, 1:s); Yv = Yv(:, 1:s); yv = yv(:, 1:s); 
     GDparams.n_epochs = 200; GDparams.eta = 0.01; 
-    %}
+%}
     
     %Search for lambda
-    count = 1;lambda = zeros(1,count);
-%
+%{
+    count = 1; lambda = zeros(1,count);
     testA = zeros(1,count); reg = zeros(1,count); vA = zeros(1,count);
     lMin=-4; lMax=-2.5; %Search for lambda
     for rep = 1:count
@@ -74,8 +74,8 @@ function two
         [theta{1,1}, theta{2,1}] = InitParam(m, d);% W: mxd, b: mx1
         [theta{1,2}, theta{2,2}] = InitParam(k, m);% W: kxm, b: kx1
 
-        %lambda(itr) = 0.01; %Ex3 and 4
-%{
+        lambda(itr) = 10^-2.98; %0.01; %Ex3 and 4
+%
         %Init of cost 
         J_cap = GDparams.n_epochs; A_cap = J_cap; %updates;
         J_train = zeros(1, J_cap);J_val = zeros(1, J_cap);
@@ -114,8 +114,8 @@ function two
             end
 
             %Evaluate losses
-            %J_train(e) = ComputeCost(X, Y, theta, lambda);
-            %J_val(e) = ComputeCost(Xv, Yv, theta, lambda);
+            J_train(e) = ComputeCost(X, Y, theta, lambda);
+            J_val(e) = ComputeCost(Xv, Yv, theta, lambda);
 
             %Accuracy
             %tA(e) = ComputeAccuracy(X, y, theta)*100; 
@@ -124,14 +124,14 @@ function two
             sprintf('Iter %d, Epoch %d', itr, e)
             %sprintf('Epoch %d, total updates %d', e, t)
         end
-%{       
+%       
         %Plot of cost on training & validation set
         figure(1); plot(J_train); hold on; plot(J_val); hold off; 
         xlim([0 e]); ylim([0 4]); %ylim([min(min(J_train), min(J_val)) max(max(J_train), max(max(J_val)))]);
         title('Cost Plot'); xlabel('Epoch'); ylabel('Cost'); grid on;
         legend({'Training','Validation'},'Location','northeast');
         sprintf('Total number of update steps is %2d', t);
-%
+%{
         %Plot of Accuracy on training & validation set 
         figure(2); plot(tA); hold on; plot(vA); hold off; 
         xlim([0 e]); ylim([30 75]);
@@ -139,9 +139,10 @@ function two
         legend({'Training','Validation'},'Location','northeast');
         sprintf('Total number of update steps is %2d', t);
 %}        
-        %Accuracy on test data
-        %testA = ComputeAccuracy(Xt, yt, theta)*100;
-        %sprintf('Accuracy on test set is %2.2f %',testA) 
+
+        %Final Accuracy on test data
+        testA = ComputeAccuracy(Xt, yt, theta)*100;
+        sprintf('Accuracy on test set is %2.2f %',testA)
 %{
         tA = ComputeAccuracy(X, y, theta)*100; 
         vA = ComputeAccuracy(Xv, yv, theta)*100; 
@@ -149,9 +150,9 @@ function two
         sprintf('Accuracy on validation set is %2.2f %',vA)        
 %}         
         %Grid search: Coarse/fine search for optimal lambda
-        sprintf('Count: %d completed in %2.2f', itr, toc)
-        reg(itr) = log10(lambda(itr));
-        vA(itr) = ComputeAccuracy(Xv, yv, theta)*100; vA(itr)
+        %sprintf('Count: %d completed in %2.2f', itr, toc)
+        %reg(itr) = log10(lambda(itr));
+        %vA(itr) = ComputeAccuracy(Xv, yv, theta)*100; vA(itr)
 
         %Cyclic learning
         figure(1); plot(n)
@@ -159,8 +160,9 @@ function two
         
         %sprintf('Total time taken %2.2f', toc)
     end
-    figure(2); scatter(reg, vA); grid on;
-    title('Accuracy vs Lambda (Fine search)'); xlabel('lambda (logarithmic)'); ylabel('Accuracy');
+    
+    %figure(2); scatter(reg, vA); grid on;
+    %title('Accuracy vs Lambda (Fine search)'); xlabel('lambda (logarithmic)'); ylabel('Accuracy');
 end
 
 function [eta] = cyclic(t, ns, etaMax, etaMin)
