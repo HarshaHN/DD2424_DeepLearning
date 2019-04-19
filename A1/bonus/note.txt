@@ -4,5 +4,7 @@ Accuracy 37.39%
 lambda = 0.01,  eta = 0.9*0.1, epoch = 40; 
 Accuracy 38.99%
 
+lambda = 0.01,  eta = 0.9*0.1, epoch = 40; 
+Accuracy 38.99%
 
 

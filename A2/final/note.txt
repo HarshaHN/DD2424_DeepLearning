@@ -1,0 +1,4 @@
+Accuracy on test set is 52.28
+Total time taken 941.33
+Epochs: 12, Itr: 1, Cycles: 3, Updates: 5880
+

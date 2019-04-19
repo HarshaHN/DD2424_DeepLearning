@@ -1,0 +1,17 @@
+A3:
+a. Preparing Data:
+Read in the training data, 
+Determine the maximum length of all the names in the dataset
+Determine the number of unique characters in the text
+Set up mapping functions - each character to a unique index & another mapping each index to
+a character.
+
+b. Back-propagation:
+
+c. Mini-batch gradient descent with momentum
+
+d. Sampling of the training data during back-prop training
+
+e. Functions to compute the accuracy, loss and confusion matrix
+
+

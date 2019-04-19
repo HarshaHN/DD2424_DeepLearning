@@ -9,8 +9,9 @@ function two
     k = 10; %class 
     m = 50; %Nodes in hidden layer
     d = 32*32*3; %image size
-    N = 10000; %Num of training samples
+    bN = 10000; %Num of training samples
     V = 1000; %Num of validation set
+    tset = 5; %training sets
 
     %Load the datasets
     [Xt, ~, yt] = LoadBatch('../Datasets/cifar-10-batches-mat/test_batch.mat');
@@ -21,9 +22,10 @@ function two
     [X3, Y3, y3] = LoadBatch('../Datasets/cifar-10-batches-mat/data_batch_3.mat');
     [X4, Y4, y4] = LoadBatch('../Datasets/cifar-10-batches-mat/data_batch_4.mat');
     [X5, Y5, y5] = LoadBatch('../Datasets/cifar-10-batches-mat/data_batch_5.mat');
-    Xv = X5(:,V+1:N); Yv = Y5(:,V+1:N); yv = y5(:,V+1:N);
-    %X5 = X5(:, 1:V); Yv = Y5(:, 1:V); yv = y5(:, 1:V);
-    X = [X, X2, X3, X4]; Y = [Y, Y2, Y3, Y4];
+    vind = bN-V+1; %Mathematical convenience
+    Xv = X5(:, vind:bN); Yv = Y5(:, vind:bN); yv = y5(:, vind:bN);
+    X5 = X5(:, 1:vind-1); Y5 = Y5(:, 1:vind-1); y5 = y5(:, 1:vind-1);
+    X = [X, X2, X3, X4, X5]; Y = [Y, Y2, Y3, Y4, Y5]; y = [y, y2, y3, y4, y5];
 %}
     N = size(X, 2); %Num of training samples %X: 3072x10,000, Y: 10x10,000, y: 1x10,000
 
@@ -66,7 +68,7 @@ function two
         l = lMin + (lMax - lMin)*rand(1, 1); lambda(rep) = 10^l;
     end
 %}
-
+    sprintf('To be performed: \n Epochs: %d, \n Itr: %d, \n Cycles: %d, \n Updates: %d', GDparams.n_epochs, count, cycle, updates)
     for itr = 1:count
         
         % Init of parameters
@@ -114,12 +116,18 @@ function two
             end
 
             %Evaluate losses
-            J_train(e) = ComputeCost(X, Y, theta, lambda);
+            J_train(e) = 0; bN = 9800;
+            for set = 1:tset %Mathematical convenience
+                str = (set-1)*bN + 1; en = set*bN;
+                J_train(e) =  J_train(e) + ComputeCost(X(:, str:en), Y(:, str:en), theta, lambda);
+                lambda(itr) = 0;
+            end
+            lambda(itr) = 10^-2.98; J_train(e) = J_train(e)/tset;
             J_val(e) = ComputeCost(Xv, Yv, theta, lambda);
-
+            
             %Accuracy
-            %tA(e) = ComputeAccuracy(X, y, theta)*100; 
-            %vA(e) = ComputeAccuracy(Xv, yv, theta)*100; 
+            tA(e) = ComputeAccuracy(X, y, theta)*100; 
+            vA(e) = ComputeAccuracy(Xv, yv, theta)*100; 
 
             sprintf('Iter %d, Epoch %d', itr, e)
             %sprintf('Epoch %d, total updates %d', e, t)
@@ -127,14 +135,14 @@ function two
 %       
         %Plot of cost on training & validation set
         figure(1); plot(J_train); hold on; plot(J_val); hold off; 
-        xlim([0 e]); ylim([0 4]); %ylim([min(min(J_train), min(J_val)) max(max(J_train), max(max(J_val)))]);
+        xlim([1 e]); ylim([0 4]); %ylim([min(min(J_train), min(J_val)) max(max(J_train), max(max(J_val)))]);
         title('Cost Plot'); xlabel('Epoch'); ylabel('Cost'); grid on;
         legend({'Training','Validation'},'Location','northeast');
         sprintf('Total number of update steps is %2d', t);
-%{
+%
         %Plot of Accuracy on training & validation set 
         figure(2); plot(tA); hold on; plot(vA); hold off; 
-        xlim([0 e]); ylim([30 75]);
+        xlim([1 e]); ylim([30 75]);
         title('Accuracy Plot'); xlabel('Epoch'); ylabel('Accuracy'); grid on;
         legend({'Training','Validation'},'Location','northeast');
         sprintf('Total number of update steps is %2d', t);
@@ -155,10 +163,10 @@ function two
         %vA(itr) = ComputeAccuracy(Xv, yv, theta)*100; vA(itr)
 
         %Cyclic learning
-        figure(1); plot(n)
+        figure(3); plot(n)
         title('Cyclic eta'); xlabel('Updates'); ylabel('eta'); grid on;
         
-        %sprintf('Total time taken %2.2f', toc)
+        sprintf('Total time taken %2.2f', toc)
     end
     
     %figure(2); scatter(reg, vA); grid on;

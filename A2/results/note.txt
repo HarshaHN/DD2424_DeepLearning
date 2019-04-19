@@ -1,0 +1,20 @@
+1. Lambda = 0; epoch = 40, eta = 0.01, batch = 100;
+Accuracy on training set is 70.30 
+Accuracy on validation set is 43.84
+Accuracy on test set is 44.30
+
+2. Lambda = 0.01; epoch = 10, eta = 0.01, batch = 100;
+Cylic: etaMin = 1e-5; etaMax = 1e-1; ns=500; t=1:2ns;
+Accuracy on training set is 60.70
+Accuracy on validation set is 45.18
+Accuracy on test set is 46.54
+
+3. Lambda = 0.01; epoch = 48, eta = 0.01, batch = 100;
+Cylic: etaMin = 1e-5; etaMax = 1e-1; ns=800; t=1:6ns;
+Accuracy on training set is 71.18
+Accuracy on validation set is 46.43
+Accuracy on test set is 46.79
+
+
+
+
