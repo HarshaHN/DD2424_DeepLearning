@@ -62,7 +62,7 @@ function three
 
     %GD Params
     GDparams.eta = 0.01; GDparams.rho = 0.9; t = 0;
-    GDparams.n_epochs = 10; GDparams.n_batch = 19; %2, 19, 38, 521
+    GDparams.n_epochs = 15; GDparams.n_batch = 38; %2, 19, 38, 521
     batches = trainN/GDparams.n_batch;
     
     %% 0.3 Construct the convolution matrices
@@ -141,7 +141,7 @@ function three
         %sprintf('Iter %d, Epoch %d', itr, e)
         sprintf('Epoch %d in %d, Total updates %d', e, toc(EpochTime), t)
     end
-%       
+%      
         %Plot of cost on training & validation set
         figure(1); plot(J_train); hold on; plot(J_val); hold off; 
         xlim([1 e]); ylim([min(min(J_train), min(J_val)) max(max(J_train), max(max(J_val)))]);
@@ -223,7 +223,7 @@ function [gradConvNet] = CompGradients(VXbatch, Ybatch, ConvNet, FP, MF)
     [k, w] = size(ConvNet.W); LW = zeros([k, w]);
     [n1, k2, n2] = size(ConvNet.F{2}); LF2 = zeros([n1, k2, n2]);
     [d, k1, n1] = size(ConvNet.F{1}); LF1 = zeros([d, k1, n1]);
-    samples = size(Ybatch,1); 
+    samples = size(Ybatch,1); n_len2 = w./n2;
     %[~, n_len, samples] = size(Xbatch); %n_len1 = n_len - k1 + 1;
     
     for i = 1:samples
@@ -236,10 +236,14 @@ function [gradConvNet] = CompGradients(VXbatch, Ybatch, ConvNet, FP, MF)
         %Layer 2
         G2 = ConvNet.W' * G3; %W*X: 55x18 X 18x1 = 55x1
         G2 = G2 .* (FP{2,i}(:)>0); %ReLU:  55x1 .* 55x1 = 55x1
-        MX{1} = MakeMXMatrix(FP{1,i}, n1, k2, n2);
-        v1 = G2' * MX{1};
-        LF2 = LF2 + reshape(v1, size(LF2));
+
+        VX = MakeVecXMatrix(FP{1,i}, n1, k2); %11x25
+        Gp = reshape(G2, [n2, n_len2]); %5x11
+        v1 = VX' * Gp'; %11x25' X 5x11' = 25x5
+        %MX = MakeMXMatrix(FP{1,i}, n1, k2, n2); %55x125
+        %v1_check = G2' * MX; isequal(v1(:), v1_check');
         
+        LF2 = LF2 + reshape(v1, size(LF2));
         %Layer 1
         G1 = MF{2}' * G2; %W*X: 75x55 X 55x1 = 75x1
         G1 = G1 .* (FP{1,i}(:)>0); %ReLU:  75x1 .* 75x1 = 75x1
@@ -248,7 +252,6 @@ function [gradConvNet] = CompGradients(VXbatch, Ybatch, ConvNet, FP, MF)
         v2 = G1' * MXpre;        
         LF1 = LF1 + reshape(v2, size(LF1));
     end
-   
     gradConvNet.W = (1/samples)*LW; 
     gradConvNet.F{1} = (1/samples)*LF1; 
     gradConvNet.F{2} = (1/samples)*LF2;
@@ -267,10 +270,11 @@ function VX = MakeVecXMatrix(trainX, d, k)
 end
 
 function MX = VXtoMX(VX, nf)
-    MX = zeros(size(VX)*nf); %MX = zeros((n_len-k+1)*nf, k*nf*d);
+    MX = zeros(size(VX)*nf);
     s = 1; e = nf;
     for i=1:size(VX,1)
         MX(s:e, :) = kron(eye(nf), VX(i,:));
+        %MX(s:e, :) = MX(s:e, :) + circshift([VF, zeros(nf, (n_len-k)*dd)], [0 shift]) VX(i,:);
         s = s + nf; e = e + nf;
     end
 end
