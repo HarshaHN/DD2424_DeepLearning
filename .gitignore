@@ -19,3 +19,11 @@ A1/html/3_files/one_02.png
 Deep-Learning-master
 A2/workspace/montage-1.m
 *.fig
+A3/workspace/three.asv
+A3/workspace/MakeVecXMatrix.m
+A3/workspace/MakeMXMatrix.m
+A3/workspace/MakeMXMatrix.asv
+A3/workspace/ForwardPass.m
+A3/workspace/ComputeLoss.m
+A3/workspace/ComputeAccuracy.m
+A3/tasklist.txt
