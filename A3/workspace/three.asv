@@ -12,8 +12,9 @@ function three
     C = unique(cell2mat(L.all_names));%List of uniq characters
     d = numel(C); %Num of uniq characters
     K = length(unique(L.ys)); %Number of unique classes
-    N = length(L.ys);% Num of names in the dataset
+    N = length(L.ys);% Num of names in the dataset    
     n_len = 0; %Maximum length of names
+    py = ones(K,1); %Weights to comp unbalanced dataset
     for i = 1:N
         n_len = max(length(L.all_names{i}), n_len);
     end
@@ -38,15 +39,30 @@ function three
     end
 
     %% 0.1 Partition into Train data and Validation data
+    %File ops
     data_fname = 'Validation_Inds.txt';
     fid = fopen(data_fname,'r'); S = fscanf(fid,'%c');
     fclose(fid); names = strsplit(S, ' ');
-
+    %Partition based on indices
     valInd = str2double(names)';
-    trainInd = setdiff(1:N,valInd)';trainN = size(trainInd, 1);
+    trainInd = setdiff(1:N,valInd)'; %trainN = size(trainInd, 1);
     valX = X(:, :, valInd); valY= ys(valInd); %Validation set
     trainX = X(:, :, trainInd); trainY = ys(trainInd); %Training set
-
+    %To compensate for unbalanced training data
+    tabT = tabulate(trainY); pick = min(tabT(:,2)); %59
+   %Capture indices of each class for random pick of 59 elements 
+    set = zeros(2, K); s = 1; e = 0;
+    for i=1:K
+        e = e + tabT(i,2);
+        set(:, i) = [s; e]; s = e+1;
+    end
+%{
+    tabTpy(:,1) = 1./(tabT(:,2)*0.001); %Norm value %tabVpy(:,1) = 1./(tabV(:,2)*1);
+    tabTpy(:,2) = tabT(:,3)./100; %Ratios %tabVpy(:,2) = tabV(:,3)./100;
+    tabTpy(:,3) = tabT(:,2); %Occurences %tabVpy(:,3) = tabV(:,2);
+    choice = 1; py = tabTpy(:, choice); %pyV = tabVpy(:, choice);
+    %Choice: '1' normalize w.r.t occurence, '2' ratios
+%}
     %% 0.2 Set hyperparameters
     n1 = 5; %Num of filters at layer 1
     k1 = 5; %width of filter at layer 1
@@ -59,14 +75,14 @@ function three
     ConvNet.F{1} = randn(d, k1, n1)*sig1;
     ConvNet.F{2} = randn(n1, k2, n2)*sig2;
     ConvNet.W = randn(K, widW)*sig3;
-
-    %GD Params
-    GDparams.eta = 0.01; GDparams.rho = 0.9; t = 0;
-    GDparams.n_epochs = 1; GDparams.n_batch = 38; %2, 19, 38, 521
-    batches = trainN/GDparams.n_batch;
+    v = cell(3,1); %Momentum vector
+    v{1} = zeros(d, k1, n1); v{2} = zeros(n1, k2, n2); v{3} = zeros(K, widW); 
     
+    %GD Params
+    GDparams.eta = 0.001; GDparams.rho = 0.75; t = 0;
+    GDparams.n_epochs = 100; GDparams.n_batch = 2; 
+    %18*59: 2, 3, 6, 9, 18, 59, 118    
     %% 0.3 Construct the convolution matrices
-   
 %{
     %Sanity check
     check = load('DebugInfo.mat');
@@ -80,7 +96,7 @@ function three
     s2 = checkMF * x_input(:);    
     equality = isequal(s1, s2, check.vecS)
 %}
-    
+
     %Initialization
     J_train = zeros(GDparams.n_epochs, 1); J_val = zeros(GDparams.n_epochs, 1); %Cost
     tA = zeros(GDparams.n_epochs, 1); vA = zeros(GDparams.n_epochs, 1); %Accuracy
@@ -89,26 +105,34 @@ function three
     VX = MakeVecXMatrix(trainX, d, k1);
     
     %Training
+    time = 0; %Training time
     for e = 1:GDparams.n_epochs %Epochs
         EpochTime = tic;
-        %Random shuffle
-        rng(400); shuffle = randperm(trainN);
-        trainX = trainX(:, :, shuffle); VX = VX(:, :, shuffle); trainY = trainY(shuffle);
-
+        
+        %Random pick and shuffle
+        index = zeros(K*pick, 1);
+        for i=1:K
+            c = pick*i; b = c-pick+1;
+            index(b:c,1) = randsample(set(1,i):set(2,i),pick)';
+        end
+        rng(400);  shuffle = index(randperm(length(index)));
+        rtrainX = trainX(:,:,shuffle); rtrainY = trainY(shuffle); rVX = VX(:,:,shuffle); 
+        
         %Batchwise parameter updation
+        batches = K*pick/GDparams.n_batch;
         ord = randperm(batches); %Random shuffle of batches
 
         for j=1:batches 
             t = t + 1; % Increment update count
-            j_start = (ord(j)-1)*GDparams.n_batch + 1;
             j_end = ord(j)*GDparams.n_batch;
+            j_start = j_end-GDparams.n_batch +1;
             inds = j_start:j_end;
-            Xbatch = trainX(:, :, inds); VXbatch = VX(:, :, inds); 
-            Ybatch = trainY(inds);
+            Xbatch = rtrainX(:, :, inds); VXbatch = rVX(:, :, inds); 
+            Ybatch = rtrainY(inds);
 
             %Updates
             %GDparams.eta = cyclic(t, ns, etaMax, etaMin); n(t) = GDparams.eta;
-            [ConvNet, ~] = MiniBatchGD(Xbatch, VXbatch, Ybatch, ConvNet, GDparams);
+            [ConvNet, ~, v] = MiniBatchGD(Xbatch, VXbatch, Ybatch, ConvNet, GDparams, v, py);
 %{
             %Evaluate Loss
             %J_train(t) = ComputeCost(X, Y, theta, lambda);
@@ -122,26 +146,23 @@ function three
         end
         
         %Evaluate losses
-        [J_train(e), YpredT] = ComputeLoss(trainX, trainY, ConvNet);
-        [J_val(e), YpredV] = ComputeLoss(valX, valY, ConvNet);
-%{        
-        %J_train(e) = 0; bN = 9800;
-        %for set = 1:tset %Mathematical convenience
-        %    str = (set-1)*bN + 1; en = set*bN;
-        %    J_train(e) =  J_train(e) + ComputeCost(X(:, str:en), Y(:, str:en), theta, lambda);
-        %    lambda(itr) = 0;
-        %end
-        %lambda(itr) = 10^-2.98; J_train(e) = J_train(e)/tset;
-        %J_val(e) = ComputeCost(Xv, Yv, theta, lambda);
-%}
-        %Accuracy
-        tA(e) = ComputeAccuracy(trainY, YpredT)*100; 
-        vA(e) = ComputeAccuracy(valY, YpredV)*100; 
+        [J_train(e), YpredT] = ComputeLoss(trainX, trainY, ConvNet, py);
+        [J_val(e), YpredV] = ComputeLoss(valX, valY, ConvNet, ones(K,1));
 
+        %Accuracy
+        %tA(e) = ComputeAccuracy(trainY, YpredT)*100;
+        c = (trainY == YpredT); tA(e) = 100 * sum(c)/size(c,1);
+        %vA(e) = ComputeAccuracy(valY, YpredV)*100;
+        c = (valY == YpredV); vA(e) = 100 * sum(c)/size(c,1);
+        
+        %figure(3); imagesc(confusionmat(valY, YpredV)); title('Confusion Matrix'); 
+        
         %sprintf('Iter %d, Epoch %d', itr, e)
         sprintf('Epoch %d in %d, Total updates %d', e, toc(EpochTime), t)
+        time=time+toc(EpochTime);
     end
-%{       
+    sprintf('Training time is %d', time)
+%      
         %Plot of cost on training & validation set
         figure(1); plot(J_train); hold on; plot(J_val); hold off; 
         xlim([1 e]); ylim([min(min(J_train), min(J_val)) max(max(J_train), max(max(J_val)))]);
@@ -151,22 +172,16 @@ function three
 %
         %Plot of Accuracy on training & validation set 
         figure(2); plot(tA); hold on; plot(vA); hold off; 
-        xlim([1 e]); ylim([30 100]);
+        xlim([1 e]);  ylim([min(min(tA), min(vA)) max(max(tA), max(max(vA)))]);
         title('Accuracy Plot'); xlabel('Epoch'); ylabel('Accuracy'); grid on;
         legend({'Training','Validation'},'Location','northeast');
         sprintf('Total number of update steps is %2d', t);
 %} 
-    toc(TotalTime)
+    figure(3); imagesc(confusionmat(valY, YpredV)); title('Confusion Matrix'); 
+    sprintf('Total time is %d', toc(TotalTime)); 
 end
 
-function A = ComputeAccuracy(Ybatch, Ypred)
-    %Compute the accuracy
-    c = zeros(size(Ypred));
-    c = (Ybatch == Ypred);
-    A = sum(c)/size(c,1);
-end
-
-function [J, Ypred] = ComputeLoss(Xbatch, Ybatch, ConvNet)
+function [J, Ypred] = ComputeLoss(Xbatch, Ybatch, ConvNet, py)
     %Compute Loss
     %X_batch: n_len*d x n
     [Ypred, FP, ~] = ForwardPass(Xbatch, ConvNet);
@@ -174,23 +189,32 @@ function [J, Ypred] = ComputeLoss(Xbatch, Ybatch, ConvNet)
     Loss = 0; samples = size(Xbatch,3);
     for i=1:samples
         p = FP{3,i};
-        Loss = Loss - log(p(Ybatch(i))) ;
+        Loss = Loss - py(Ybatch(i))*log(p(Ybatch(i)));
     end
     J = Loss ./ samples;
 end
 
-function [ConvNetStar, FP] = MiniBatchGD(Xbatch, VXbatch, Ybatch, ConvNet, GDparams)
+function [ConvNetStar, FP, v] = MiniBatchGD(Xbatch, VXbatch, Ybatch, ConvNet, GDparams, v, py)
 %Mini batch Gradient Descent Algo
     %Predict
     [~, FP, MF] = ForwardPass(Xbatch, ConvNet);
  
     %Compute gradient
-    [gradConvNet] = CompGradients(VXbatch, Ybatch, ConvNet, FP, MF);
-    
+    [gradConvNet] = CompGradients(VXbatch, Ybatch, ConvNet, FP, MF, py);
+%
+    %Sanity check for gradient
+    [gn] = NumericalGradient(Xbatch, Ybatch, ConvNet, 1e-5);
+    relerr.W = rerr(gradConvNet.W, gn{3});
+    relerr.F{1} = sum(rerr(gradConvNet.F{1}, gn{1}))./size(gradConvNet.F{1},3); 
+    relerr.F{2} = sum(rerr(gradConvNet.F{2}, gn{2}))./size(gradConvNet.F{2},3);
+%}    
     %Update the parameters in theta
-    ConvNetStar.F{1} = ConvNet.F{1} - GDparams.eta * gradConvNet.F{1};
-    ConvNetStar.F{2} = ConvNet.F{2} - GDparams.eta * gradConvNet.F{2};
-    ConvNetStar.W = ConvNet.W - GDparams.eta * gradConvNet.W;
+    v{1} = GDparams.rho*v{1} + GDparams.eta * gradConvNet.F{1};
+    v{2} = GDparams.rho*v{2} + GDparams.eta * gradConvNet.F{2};
+    v{3} = GDparams.rho*v{3} + GDparams.eta * gradConvNet.W;
+    ConvNetStar.F{1} = ConvNet.F{1} - v{1};
+    ConvNetStar.F{2} = ConvNet.F{2} - v{2};
+    ConvNetStar.W = ConvNet.W - v{3};
 end
 
 function [Yp, FP, MF] = ForwardPass(Xbatch, ConvNet)
@@ -215,7 +239,7 @@ function [Yp, FP, MF] = ForwardPass(Xbatch, ConvNet)
     end
 end
 
-function [gradConvNet] = CompGradients(VXbatch, Ybatch, ConvNet, FP, MF)
+function [gradConvNet] = CompGradients(VXbatch, Ybatch, ConvNet, FP, MF, py)
     %Compute gradients via back propagation w.r.t  vec(F1), vec(F2), W
     %Xbatch: d x n_len x samples, Ybatch: samples, ConvNet: F1, F2, W
     %FP: 3xsamples of X, MF: 1x2 of F1, F2
@@ -223,15 +247,14 @@ function [gradConvNet] = CompGradients(VXbatch, Ybatch, ConvNet, FP, MF)
     [k, w] = size(ConvNet.W); LW = zeros([k, w]);
     [n1, k2, n2] = size(ConvNet.F{2}); LF2 = zeros([n1, k2, n2]);
     [d, k1, n1] = size(ConvNet.F{1}); LF1 = zeros([d, k1, n1]);
-    samples = size(Ybatch,1); n_len2 = w./n2;
-    %[~, n_len, samples] = size(Xbatch); %n_len1 = n_len - k1 + 1;
-    
+    samples = size(Ybatch,1); n_len2 = w./n2; n_len1 = n_len2+k2-1;
+
     for i = 1:samples
         Yhot = bsxfun(@eq, 1:k, Ybatch(i))';
         %Softmax
         G3 = -(Yhot - FP{3, i});
         %Layer 3
-        LW = LW + G3 * FP{2,i}(:)'; %W*X: 18x1 X 1x55 = 18x55
+        LW = LW + py(Ybatch(i))*(G3 * FP{2,i}(:)'); %W*X: 18x1 X 1x55 = 18x55
         
         %Layer 2
         G2 = ConvNet.W' * G3; %W*X: 55x18 X 18x1 = 55x1
@@ -239,21 +262,20 @@ function [gradConvNet] = CompGradients(VXbatch, Ybatch, ConvNet, FP, MF)
 
         VX = MakeVecXMatrix(FP{1,i}, n1, k2); %11x25
         Gp = reshape(G2, [n2, n_len2]); %5x11
-        v1_check = VX' * Gp'; %11x25' X 5x11' = 25x5
+        v1 = VX' * Gp'; %11x25' X 5x11' = 25x5
+        %MX = MakeMXMatrix(FP{1,i}, n1, k2, n2); %55x125
+        %v1_check = G2' * MX; isequal(v1(:), v1_check');
+        LF2 = LF2 + py(Ybatch(i))*reshape(v1, size(LF2));
         
-          
-        MX = MakeMXMatrix(FP{1,i}, n1, k2, n2); %55x125
-        v1 = G2' * MX;
-        isequal(v1_check(:), v1');
-        
-        LF2 = LF2 + reshape(v1, size(LF2));
         %Layer 1
         G1 = MF{2}' * G2; %W*X: 75x55 X 55x1 = 75x1
         G1 = G1 .* (FP{1,i}(:)>0); %ReLU:  75x1 .* 75x1 = 75x1
         %MX{2} = MakeMXMatrix(Xbatch(:,:,i), d, k1, n1);
-        MXpre = VXtoMX(VXbatch(:,:,i), n1);
-        v2 = G1' * MXpre;        
-        LF1 = LF1 + reshape(v2, size(LF1));
+        %MXpre = VXtoMX(VXbatch(:,:,i), n1);v2 = G1' * MXpre;        
+        Gp = reshape(G1, [n1, n_len1]); %5x15
+        v2 = VXbatch(:,:,i)' * Gp'; %15x140' X 5x15' = 140x5
+        %isequal(v2c(:), v2');
+        LF1 = LF1 + py(Ybatch(i))*reshape(v2, size(LF1));
     end
     gradConvNet.W = (1/samples)*LW; 
     gradConvNet.F{1} = (1/samples)*LF1; 
@@ -272,31 +294,6 @@ function VX = MakeVecXMatrix(trainX, d, k)
     end
 end
 
-function MX = VXtoMX(VX, nf)
-    MX = zeros(size(VX)*nf);
-    s = 1; e = nf;
-    for i=1:size(VX,1)
-        MX(s:e, :) = kron(eye(nf), VX(i,:));
-        %MX(s:e, :) = MX(s:e, :) + circshift([VF, zeros(nf, (n_len-k)*dd)], [0 shift]) VX(i,:);
-        s = s + nf; e = e + nf;
-    end
-end
-
-function MX = MakeMXMatrix(x_in, d, k, nf)
-    %MX: (n_len-k+1)*nf X k*nf*d
-    [~, n_len] = size(x_in);
-    MX = zeros((n_len-k+1)*nf, k*nf*d);
-    VX = zeros(n_len-k+1, d*k);
-    
-    s = 1; e = nf;
-    for i=1:(n_len-k+1)
-        temp = x_in(:, i:k+i-1);
-        VX(i, :) = temp(:)';
-        MX(s:e, :) = kron(eye(nf), VX(i, :));
-        s = s + nf; e = e + nf;
-    end
-end
-
 function MF = MakeMFMatrix(F, n_len)
     % MF: (nlen-k+1)*nf X nlen*dd
     [dd, k, nf] = size(F);
@@ -312,6 +309,99 @@ function MF = MakeMFMatrix(F, n_len)
     for j = 1:(n_len-k+1)
         shift = (j-1)*dd;
         MF(s:e, :) = MF(s:e, :) + circshift([VF, zeros(nf, (n_len-k)*dd)], [0 shift]);
+        s = s + nf; e = e + nf;
+    end
+end
+
+%% ==========================================================
+function [rerr] = rerr(ga, gn)
+    %Compute relative error
+    rerr = sum(sum(abs(ga - gn)./max(eps, abs(ga) + abs(gn))))./ numel(ga);
+end
+function Gs = NumericalGradient(X_inputs, Ys, ConvNet, h)
+K = ConvNet.W
+try_ConvNet = ConvNet;
+Gs = cell(length(ConvNet.F)+1, 1);
+
+for l=1:length(ConvNet.F)
+    try_convNet.F{l} = ConvNet.F{l};
+    
+    Gs{l} = zeros(size(ConvNet.F{l}));
+    nf = size(ConvNet.F{l},  3);
+    
+    for i = 1:nf        
+        try_ConvNet.F{l} = ConvNet.F{l};
+        F_try = squeeze(ConvNet.F{l}(:, :, i));
+        G = zeros(numel(F_try), 1);
+        
+        for j=1:numel(F_try)
+            F_try1 = F_try;
+            F_try1(j) = F_try(j) - h;
+            try_ConvNet.F{l}(:, :, i) = F_try1; 
+            
+            l1 = ComputeLoss(X_inputs, Ys, try_ConvNet);
+            
+            F_try2 = F_try;
+            F_try2(j) = F_try(j) + h;            
+            
+            try_ConvNet.F{l}(:, :, i) = F_try2;
+            l2 = ComputeLoss(X_inputs, Ys, try_ConvNet);            
+            
+            G(j) = (l2 - l1) / (2*h);
+            try_ConvNet.F{l}(:, :, i) = F_try;
+        end
+        Gs{l}(:, :, i) = reshape(G, size(F_try));
+    end
+end
+
+%% compute the gradient for the fully connected layer
+W_try = ConvNet.W;
+G = zeros(numel(W_try), 1);
+for j=1:numel(W_try)
+    W_try1 = W_try;
+    W_try1(j) = W_try(j) - h;
+    try_ConvNet.W = W_try1; 
+            
+    l1 = ComputeLoss(X_inputs, Ys, try_ConvNet);
+            
+    W_try2 = W_try;
+    W_try2(j) = W_try(j) + h;            
+            
+    try_ConvNet.W = W_try2;
+    l2 = ComputeLoss(X_inputs, Ys, try_ConvNet, ones());            
+            
+    G(j) = (l2 - l1) / (2*h);
+    try_ConvNet.W = W_try;
+end
+Gs{end} = reshape(G, size(W_try));
+end
+
+function A = ComputeAccuracy(Ybatch, Ypred)
+    %Compute the accuracy
+    %c = zeros(size(Ypred));
+    c = (Ybatch == Ypred);
+    A = sum(c)/size(c,1);
+end
+function MX = VXtoMX(VX, nf)
+    MX = zeros(size(VX)*nf); %Not used
+    s = 1; e = nf;
+    for i=1:size(VX,1)
+        MX(s:e, :) = kron(eye(nf), VX(i,:));
+        %MX(s:e, :) = MX(s:e, :) + circshift([VF, zeros(nf, (n_len-k)*dd)], [0 shift]) VX(i,:);
+        s = s + nf; e = e + nf;
+    end
+end
+function MX = MakeMXMatrix(x_in, d, k, nf)
+    %MX: (n_len-k+1)*nf X k*nf*d %Not used
+    [~, n_len] = size(x_in);
+    MX = zeros((n_len-k+1)*nf, k*nf*d);
+    VX = zeros(n_len-k+1, d*k);
+    
+    s = 1; e = nf;
+    for i=1:(n_len-k+1)
+        temp = x_in(:, i:k+i-1);
+        VX(i, :) = temp(:)';
+        MX(s:e, :) = kron(eye(nf), VX(i, :));
         s = s + nf; e = e + nf;
     end
 end

@@ -22,7 +22,7 @@ for i=1:length(names)
     all_names{i} = name;
 end
 
-disp('Saving the data')
-tic
+%disp('Saving the data')
+%tic
 save('assignment3_names.mat', 'ys', 'all_names');
-toc
+%toc
