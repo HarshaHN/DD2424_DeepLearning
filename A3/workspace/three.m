@@ -7,18 +7,17 @@ function three
     close all; clear; clc; 
     TotalTime = tic;
 
-    %0.0 Data preprocessing
+    %% 0.0 Data preprocessing
     ExtractNames; L = load('assignment3_names.mat');
     C = unique(cell2mat(L.all_names));%List of uniq characters
     d = numel(C); %Num of uniq characters
     K = length(unique(L.ys)); %Number of unique classes
     N = length(L.ys);% Num of names in the dataset    
     n_len = 0; %Maximum length of names
-    py = ones(K,1); %Weights to comp unbalanced dataset
     for i = 1:N
         n_len = max(length(L.all_names{i}), n_len);
     end
-
+    
     % Character to Index mapping
     char_to_ind = containers.Map('KeyType','char','ValueType','int32');
     ind_to_char = containers.Map('KeyType','int32','ValueType','char');
@@ -43,31 +42,16 @@ function three
     data_fname = 'Validation_Inds.txt';
     fid = fopen(data_fname,'r'); S = fscanf(fid,'%c');
     fclose(fid); names = strsplit(S, ' ');
+    
     %Partition based on indices
     valInd = str2double(names)';
-    trainInd = setdiff(1:N,valInd)'; %trainN = size(trainInd, 1);
+    trainInd = setdiff(1:N,valInd)'; trainN = size(trainInd, 1);
     valX = X(:, :, valInd); valY= ys(valInd); %Validation set
     trainX = X(:, :, trainInd); trainY = ys(trainInd); %Training set
-    %To compensate for unbalanced training data
-    tabT = tabulate(trainY); pick = min(tabT(:,2)); %59
-   %Capture indices of each class for random pick of 59 elements 
-    set = zeros(2, K); s = 1; e = 0;
-    for i=1:K
-        e = e + tabT(i,2);
-        set(:, i) = [s; e]; s = e+1;
-    end
-%{
-    tabTpy(:,1) = 1./(tabT(:,2)*0.001); %Norm value %tabVpy(:,1) = 1./(tabV(:,2)*1);
-    tabTpy(:,2) = tabT(:,3)./100; %Ratios %tabVpy(:,2) = tabV(:,3)./100;
-    tabTpy(:,3) = tabT(:,2); %Occurences %tabVpy(:,3) = tabV(:,2);
-    choice = 1; py = tabTpy(:, choice); %pyV = tabVpy(:, choice);
-    %Choice: '1' normalize w.r.t occurence, '2' ratios
-%}
+
     %% 0.2 Set hyperparameters
-    n1 = 20; %Num of filters at layer 1
-    k1 = 5; %width of filter at layer 1
-    n2 = 20; %Num of filters at layer 2
-    k2 = 3; %width of filter at layer 2
+    n1 = 30; k1 = 5; %Num & width of filters at layer 1
+    n2 = 30; k2 = 5; %Num & width of filters at layer 2
     n_len1 = n_len - k1 + 1; n_len2 = n_len1 - k2 + 1; widW = n2 * n_len2;
     
     %Weight initialization
@@ -75,14 +59,36 @@ function three
     ConvNet.F{1} = randn(d, k1, n1)*sig1;
     ConvNet.F{2} = randn(n1, k2, n2)*sig2;
     ConvNet.W = randn(K, widW)*sig3;
-    v = cell(3,1); %Momentum vector
-    v{1} = zeros(d, k1, n1); v{2} = zeros(n1, k2, n2); v{3} = zeros(K, widW); 
     
-    %GD Params
-    GDparams.eta = 0.001; GDparams.rho = 0.75; t = 0;
-    GDparams.n_batch = 3; batches = K*pick/GDparams.n_batch;
-    GDparams.n_epochs = ceil(20000/batches);
-    %divisors(18*59): 2, 3, 6, 9, 18, 59, 118, 1062   
+    %Momentum vector
+    v = cell(3,1); v{1} = zeros(d, k1, n1); v{2} = zeros(n1, k2, n2); v{3} = zeros(K, widW); 
+    
+    %% 0.5 Balanced dataset
+    tabT = tabulate(trainY);
+    
+    %Option 1: Normalize
+%
+    tabTpy(:,1) = 1./(tabT(:,2)*0.001); %Norm value %tabVpy(:,1) = 1./(tabV(:,2)*1);
+    tabTpy(:,2) = tabT(:,3)./100; tabTpy(:,3) = tabT(:,2); %Ratios & Freq %tabVpy(:,2) = tabV(:,3)./100; %tabVpy(:,3) = tabV(:,2);
+    choice = 1; py = tabTpy(:, choice); %pyV = tabVpy(:, choice);
+    %Choice: '1' normalize w.r.t occurence, '2' ratios
+%}
+    %Option 2: Random pick in the size of smallest class samples
+%{    
+    py = ones(K,1); pick = min(tabT(:,2)); 
+    GDparams.n_batch = 3; GDparams.batches = K*pick/GDparams.n_batch;
+    set = zeros(2, K); s = 1; e = 0;
+    for i=1:K
+        e = e + tabT(i,2);
+        set(:, i) = [s; e]; s = e+1;
+    end
+%}    
+    %Unbalanced dataset
+    GDparams.n_batch = 19; GDparams.batches = trainN/GDparams.n_batch;
+    
+    GDparams.eta = 0.001; GDparams.rho = 0.9; 
+    GDparams.n_epochs = ceil(30000/GDparams.batches);
+    %divisors(19798): 2, 19, 38, 521, 1042, 9899, 19798; divisors(18*59): 2, 3, 6, 9, 18, 59, 118, 1062   
     %% 0.3 Construct the convolution matrices
 %{
     %Sanity check
@@ -97,41 +103,48 @@ function three
     s2 = checkMF * x_input(:);    
     equality = isequal(s1, s2, check.vecS)
 %}
-
+    
+    %% Training
+    disp('***Training begins!***'); 
+    sprintf('Number of epochs: %d\n Batch size: %d, Batches: %d, updates: %d',GDparams.n_epochs, GDparams.n_batch, GDparams.batches, GDparams.n_batch*GDparams.batches)
+    
     %Initialization
     J_train = zeros(GDparams.n_epochs, 1); J_val = zeros(GDparams.n_epochs, 1); %Cost
     tA = zeros(GDparams.n_epochs, 1); vA = zeros(GDparams.n_epochs, 1); %Accuracy
+    time = 0;  t = 0; %Training time and update count
     
     %Pre-computes
     VX = MakeVecXMatrix(trainX, d, k1);
     
-    %Training
-    time = 0; %Training time
-    disp('***Training begins!***'); 
-    sprintf('Number of epochs: %d\n Batch size: %d \n Batches: %d',GDparams.n_epochs, GDparams.n_batch, batches)
     for e = 1:GDparams.n_epochs %Epochs
-        EpochTime = tic;
+        EpochTime = tic; rng(400);
         
         %Random pick and shuffle
+%{
+        %Balanced dataset Option 02
         index = zeros(K*pick, 1);
         for i=1:K
             c = pick*i; b = c-pick+1;
             index(b:c,1) = randsample(set(1,i):set(2,i),pick)';
         end
-        rng(400);  shuffle = index(randperm(length(index)));
+        shuffle = index(randperm(length(index)));
         rtrainX = trainX(:,:,shuffle); rtrainY = trainY(shuffle); rVX = VX(:,:,shuffle); 
+%}
+        %Unbalanced dataset or Option 01
+        shuffle = randperm(trainN);
+        rtrainX = trainX(:,:,shuffle); rtrainY = trainY(shuffle); rVX = VX(:,:,shuffle);
         
         %Batchwise parameter updation
-        %batches = K*pick/GDparams.n_batch;
-        ord = randperm(batches); %Random shuffle of batches
+        ord = randperm(GDparams.batches); %Random shuffle of batches
 
-        for j=1:batches 
+        for j=1:GDparams.batches 
+            %uTime = tic; %Update time
             t = t + 1; % Increment update count
             j_end = ord(j)*GDparams.n_batch;
             j_start = j_end-GDparams.n_batch +1;
             inds = j_start:j_end;
-            Xbatch = rtrainX(:, :, inds); VXbatch = rVX(:, :, inds); 
-            Ybatch = rtrainY(inds);
+            Xbatch = rtrainX(:,:,inds);
+            VXbatch = rVX(:,:,inds); Ybatch = rtrainY(inds);
 
             %Updates
             %GDparams.eta = cyclic(t, ns, etaMax, etaMin); n(t) = GDparams.eta;
@@ -145,20 +158,19 @@ function three
             %tA(t) = ComputeAccuracy(X, y, theta)*100; 
             %vA(t) = ComputeAccuracy(Xv, yv, theta)*100; 
 %}
-            %sprintf('Total updates: %d, Epoch %d - Batch %d', t, e, j)
+            %sprintf('Total updates: %d at %d', t, toc(uTime))%sprintf('Total updates: %d, Epoch %d - Batch %d', t, e, j)
         end
         
         %Evaluate losses
         [J_train(e), YpredT] = ComputeLoss(trainX, trainY, ConvNet, py);
         [J_val(e), YpredV] = ComputeLoss(valX, valY, ConvNet, ones(K,1));
-
+        
         %Accuracy
         tA(e) = 100 * mean(trainY == YpredT);
         vA(e) = 100 * mean(valY == YpredV);
         
         %figure(3); imagesc(confusionmat(valY, YpredV)); title('Confusion Matrix'); 
         
-        %sprintf('Iter %d, Epoch %d', itr, e)
         sprintf('Epoch %d in %d, Total updates %d', e, toc(EpochTime), t)
         time=time+toc(EpochTime);
     end
@@ -178,7 +190,25 @@ function three
         legend({'Training','Validation'},'Location','northeast');
         sprintf('Total number of update steps is %2d', t);
 %} 
-    figure(3); imagesc(confusionmat(valY, YpredV)); title('Confusion Matrix of validation set'); 
+    %figure(3); conf = plotconfusion(valY, YpredV); %save('conf.mat', 'conf');
+    %C = confusionmat(valY, YpredV);  T = valY; P = YpredV; save('confusion.mat', 'C', 'T', 'P')
+    %C = imagesc(confusionmat(valY, YpredV)); title('Confusion Matrix of validation set'); 
+%
+    %For test purpose
+    test = ["huang"; "maria"; "akeel"; "andreas"; "gonzales"; "woods"];
+    testY = [2, 15, 1, 7, 17, 5]'; testX = zeros(d, n_len, length(testY));
+    for i = 1:6
+        tem = num2str(test(i));
+        n_name = length(tem);
+        for j = 1: n_name
+            ind = char_to_ind(tem(j));
+            testX(:, j, i) = bsxfun(@eq, 1:d, ind)'; %one-hot encoding
+        end
+    end
+    [Ypredict, FP, ~] = ForwardPass(testX, ConvNet); 
+    A = 100 * mean(testY == Ypredict);
+    save('ConvNet.mat', 'ConvNet'); save('Test.mat','testX','testY','Ypredict','FP');
+%}    
     sprintf('Total time is %d', toc(TotalTime)); 
 end
 
@@ -264,18 +294,18 @@ function [gradConvNet] = CompGradients(VXbatch, Ybatch, ConvNet, FP, MF, py)
         VX = MakeVecXMatrix(FP{1,i}, n1, k2); %11x25
         Gp = reshape(G2, [n2, n_len2]); %5x11
         v1 = VX' * Gp'; %11x25' X 5x11' = 25x5
-        %MX = MakeMXMatrix(FP{1,i}, n1, k2, n2); %55x125
-        %v1_check = G2' * MX; isequal(v1(:), v1_check');
+        %MX = MakeMXMatrix(FP{1,i}, n1, k2, n2); %55x125 !
+        %v1 = G2' * MX; %isequal(v1(:), v1_check'); !
         LF2 = LF2 + py(Ybatch(i))*reshape(v1, size(LF2));
         
         %Layer 1
         G1 = MF{2}' * G2; %W*X: 75x55 X 55x1 = 75x1
         G1 = G1 .* (FP{1,i}(:)>0); %ReLU:  75x1 .* 75x1 = 75x1
-        %MX{2} = MakeMXMatrix(Xbatch(:,:,i), d, k1, n1);
-        %MXpre = VXtoMX(VXbatch(:,:,i), n1);v2 = G1' * MXpre;        
+        
         Gp = reshape(G1, [n1, n_len1]); %5x15
         v2 = VXbatch(:,:,i)' * Gp'; %15x140' X 5x15' = 140x5
-        %isequal(v2c(:), v2');
+        %MX{2} = MakeMXMatrix(Xbatch(:,:,i), d, k1, n1);
+        %MXpre = VXtoMX(VXbatch(:,:,i), n1);v2 = G1' * MXpre;%isequal(v2c(:), v2'); !
         LF1 = LF1 + py(Ybatch(i))*reshape(v2, size(LF1));
     end
     gradConvNet.W = (1/samples)*LW; 
@@ -376,7 +406,6 @@ for j=1:numel(W_try)
 end
 Gs{end} = reshape(G, size(W_try));
 end
-
 function A = ComputeAccuracy(Ybatch, Ypred)
     %Compute the accuracy
     A = mean((valY == YpredV));
