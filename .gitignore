@@ -1,21 +1,11 @@
 
-A1/Datasets/cifar-10-batches-mat/data_batch_1.mat
-A1/Datasets/cifar-10-batches-mat/batches.meta.mat
-A1/Datasets/cifar-10-batches-mat/data_batch_2.mat
-A1/Datasets/cifar-10-batches-mat/data_batch_3.mat
-A1/Datasets/cifar-10-batches-mat/data_batch_4.mat
-A1/Datasets/cifar-10-batches-mat/data_batch_5.mat
-A1/Datasets/cifar-10-batches-mat/readme.html
-A1/Datasets/cifar-10-batches-mat/test_batch.mat
-A1/Datasets/cifar-10-matlab.tar.gz
+A1/Datasets/*
 *.html
-A1/html/2_files/one_01.png
-A1/html/2_files/one_02.png
-A1/html/3_files/one_01.png
-A1/html/3_files/one_02.png
+A1/html/*
 *.mat
 *.gz
 *.zip
+
 Deep-Learning-master
 A2/workspace/montage-1.m
 *.fig
